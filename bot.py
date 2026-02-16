@@ -29,34 +29,62 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # ---- COMMAND: set watch channel
-    if message.content.startswith("!watch"):
-        if message.channel_mentions:
-            watch_channel_id = message.channel_mentions[0].id
-            await message.channel.send(f"👀 Now watching {message.channel_mentions[0].mention}")
+    # -------- DOCUMENTATION ----------
+    if message.content.startswith("t!documentation"):
+        doc = """
+**🧠 TerminusAI Commands**
+
+`t!watch #channel`  
+→ Choose which channel to summarize  
+
+`t!sendhere #channel`  
+→ Choose where summaries get sent  
+
+`t!start`  
+→ Start summarizing  
+
+`t!stop`  
+→ Stop summarizing  
+
+**How it works:**  
+Bot watches chosen channel and summarizes every 20 messages  
+into 1-2 short sentences.
+"""
+        await message.channel.send(doc)
         return
 
-    # ---- COMMAND: set send channel
-    if message.content.startswith("!sendhere"):
+    # -------- SET WATCH CHANNEL ----------
+    if message.content.startswith("t!watch"):
+        if message.channel_mentions:
+            watch_channel_id = message.channel_mentions[0].id
+            await message.channel.send(f"👀 Watching {message.channel_mentions[0].mention}")
+        else:
+            await message.channel.send("Usage: t!watch #channel")
+        return
+
+    # -------- SET SEND CHANNEL ----------
+    if message.content.startswith("t!sendhere"):
         if message.channel_mentions:
             send_channel_id = message.channel_mentions[0].id
             await message.channel.send(f"🧠 Summaries will go to {message.channel_mentions[0].mention}")
+        else:
+            await message.channel.send("Usage: t!sendhere #channel")
         return
 
-    # ---- START
-    if message.content == "!start":
+    # -------- START ----------
+    if message.content == "t!start":
         active = True
         buffer = []
         await message.channel.send("✅ Summarizer ON")
         return
 
-    # ---- STOP
-    if message.content == "!stop":
+    # -------- STOP ----------
+    if message.content == "t!stop":
         active = False
         await message.channel.send("🛑 Summarizer OFF")
         return
 
-    # ---- MESSAGE TRACKING
+    # -------- MESSAGE TRACKING ----------
     if not active:
         return
 
@@ -84,7 +112,7 @@ async def summarize_and_send(guild):
 
     prompt = f"""
 Summarize this Discord conversation in ONLY 1-2 short sentences.
-Be concise and clear.
+Keep it concise and clear.
 
 {text}
 """
