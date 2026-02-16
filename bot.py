@@ -92,7 +92,7 @@ async def on_message(message):
     buffer.append(f"{message.author.display_name}: {message.content}")
     print(f"📥 Message added. Buffer size: {len(buffer)}")
 
-    if len(buffer) >= 20:
+    if len(buffer) == 20:
         await summarize_and_send(message.guild)
         buffer = []
 
