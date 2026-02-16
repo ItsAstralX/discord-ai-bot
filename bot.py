@@ -1,6 +1,5 @@
 import discord
 import os
-import asyncio
 from openai import OpenAI
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -12,44 +11,91 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = discord.Client(intents=intents)
 
-GENERAL = "general"
-RECAP = "ai-recaps"
+watch_channel_id = None
+send_channel_id = None
+active = False
+buffer = []
 
-message_buffer = []
-
+# -------- READY ----------
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
+# -------- COMMANDS ----------
 @bot.event
 async def on_message(message):
-    global message_buffer
+    global watch_channel_id, send_channel_id, active, buffer
 
     if message.author.bot:
         return
-    if message.channel.name != GENERAL:
+
+    # ---- COMMAND: set watch channel
+    if message.content.startswith("!watch"):
+        if message.channel_mentions:
+            watch_channel_id = message.channel_mentions[0].id
+            await message.channel.send(f"👀 Now watching {message.channel_mentions[0].mention}")
         return
 
-    message_buffer.append(f"{message.author.display_name}: {message.content}")
-
-    if len(message_buffer) >= 20:
-        await send_summary(message.guild)
-        message_buffer = []
-
-async def send_summary(guild):
-    channel = discord.utils.get(guild.text_channels, name=RECAP)
-    if not channel:
+    # ---- COMMAND: set send channel
+    if message.content.startswith("!sendhere"):
+        if message.channel_mentions:
+            send_channel_id = message.channel_mentions[0].id
+            await message.channel.send(f"🧠 Summaries will go to {message.channel_mentions[0].mention}")
         return
 
-    text = "\n".join(message_buffer)
+    # ---- START
+    if message.content == "!start":
+        active = True
+        buffer = []
+        await message.channel.send("✅ Summarizer ON")
+        return
+
+    # ---- STOP
+    if message.content == "!stop":
+        active = False
+        await message.channel.send("🛑 Summarizer OFF")
+        return
+
+    # ---- MESSAGE TRACKING
+    if not active:
+        return
+
+    if watch_channel_id is None or send_channel_id is None:
+        return
+
+    if message.channel.id != watch_channel_id:
+        return
+
+    buffer.append(f"{message.author.display_name}: {message.content}")
+
+    if len(buffer) >= 20:
+        await summarize_and_send(message.guild)
+        buffer = []
+
+# -------- SUMMARY ----------
+async def summarize_and_send(guild):
+    global buffer
+
+    send_channel = guild.get_channel(send_channel_id)
+    if not send_channel:
+        return
+
+    text = "\n".join(buffer)
+
+    prompt = f"""
+Summarize this Discord conversation in ONLY 1-2 short sentences.
+Be concise and clear.
+
+{text}
+"""
 
     res = ai.chat.completions.create(
         model="gpt-5-nano",
-        messages=[{"role": "user", "content": f"Summarize this discord chat:\n{text}"}]
+        messages=[{"role": "user", "content": prompt}]
     )
 
-    summary = res.choices[0].message.content
+    summary = res.choices[0].message.content.strip()
 
-    await channel.send(f"🧠 **20 message summary:**\n{summary}")
+    await send_channel.send(f"🧠 {summary}")
 
 bot.run(DISCORD_TOKEN)
