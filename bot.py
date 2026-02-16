@@ -16,12 +16,16 @@ send_channel_id = None
 active = False
 buffer = []
 
-# -------- READY ----------
+# ---------- READY ----------
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f"🔥 Bot online as {bot.user}")
 
-# -------- COMMANDS ----------
+# ---------- EMBED HELPER ----------
+def embed(msg, color=0x8a2be2):
+    return discord.Embed(description=msg, color=color)
+
+# ---------- MESSAGE ----------
 @bot.event
 async def on_message(message):
     global watch_channel_id, send_channel_id, active, buffer
@@ -29,62 +33,51 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # -------- DOCUMENTATION ----------
-    if message.content.startswith("t!documentation"):
-        doc = """
-**🧠 TerminusAI Commands**
+    content = message.content.lower()
 
-`t!watch #channel`  
-→ Choose which channel to summarize  
-
-`t!sendhere #channel`  
-→ Choose where summaries get sent  
-
-`t!start`  
-→ Start summarizing  
-
-`t!stop`  
-→ Stop summarizing  
-
-**How it works:**  
-Bot watches chosen channel and summarizes every 20 messages  
-into 1-2 short sentences.
-"""
-        await message.channel.send(doc)
+    # ---------- DOCUMENTATION ----------
+    if content.startswith("t!documentation"):
+        e = discord.Embed(title="📘 TerminusAI Commands", color=0x8a2be2)
+        e.add_field(name="t!watch #channel", value="Set channel to summarize", inline=False)
+        e.add_field(name="t!sendhere #channel", value="Where summaries go", inline=False)
+        e.add_field(name="t!start", value="Start summarizing", inline=False)
+        e.add_field(name="t!stop", value="Stop summarizing", inline=False)
+        e.set_footer(text="Summarizes every 20 messages in 1–2 sentences.")
+        await message.channel.send(embed=e)
         return
 
-    # -------- SET WATCH CHANNEL ----------
-    if message.content.startswith("t!watch"):
+    # ---------- WATCH CHANNEL ----------
+    if content.startswith("t!watch"):
         if message.channel_mentions:
             watch_channel_id = message.channel_mentions[0].id
-            await message.channel.send(f"👀 Watching {message.channel_mentions[0].mention}")
+            await message.channel.send(embed=embed(f"👀 Now watching {message.channel_mentions[0].mention}"))
         else:
-            await message.channel.send("Usage: t!watch #channel")
+            await message.channel.send(embed=embed("Usage: t!watch #channel", 0xff0000))
         return
 
-    # -------- SET SEND CHANNEL ----------
-    if message.content.startswith("t!sendhere"):
+    # ---------- SEND CHANNEL ----------
+    if content.startswith("t!sendhere"):
         if message.channel_mentions:
             send_channel_id = message.channel_mentions[0].id
-            await message.channel.send(f"🧠 Summaries will go to {message.channel_mentions[0].mention}")
+            await message.channel.send(embed=embed(f"🧠 Summaries will be sent in {message.channel_mentions[0].mention}"))
         else:
-            await message.channel.send("Usage: t!sendhere #channel")
+            await message.channel.send(embed=embed("Usage: t!sendhere #channel", 0xff0000))
         return
 
-    # -------- START ----------
-    if message.content == "t!start":
+    # ---------- START ----------
+    if content == "t!start":
         active = True
         buffer = []
-        await message.channel.send("✅ Summarizer ON")
+        await message.channel.send(embed=embed("✅ Summarizer started"))
         return
 
-    # -------- STOP ----------
-    if message.content == "t!stop":
+    # ---------- STOP ----------
+    if content == "t!stop":
         active = False
-        await message.channel.send("🛑 Summarizer OFF")
+        await message.channel.send(embed=embed("🛑 Summarizer stopped"))
         return
 
-    # -------- MESSAGE TRACKING ----------
+    # ---------- TRACK MESSAGES ----------
     if not active:
         return
 
@@ -100,7 +93,7 @@ into 1-2 short sentences.
         await summarize_and_send(message.guild)
         buffer = []
 
-# -------- SUMMARY ----------
+# ---------- SUMMARY ----------
 async def summarize_and_send(guild):
     global buffer
 
@@ -112,7 +105,7 @@ async def summarize_and_send(guild):
 
     prompt = f"""
 Summarize this Discord conversation in ONLY 1-2 short sentences.
-Keep it concise and clear.
+Be concise and clear.
 
 {text}
 """
@@ -124,6 +117,6 @@ Keep it concise and clear.
 
     summary = res.choices[0].message.content.strip()
 
-    await send_channel.send(f"🧠 {summary}")
+    await send_channel.send(embed=embed(f"🧠 {summary}"))
 
 bot.run(DISCORD_TOKEN)
