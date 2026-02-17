@@ -21,19 +21,20 @@ buffer = []
 
 def clean_message(msg: str):
     msg = msg.lower()
-    msg = re.sub(r'http\S+', '', msg)              # remove links
-    msg = re.sub(r'[^\w\s,.!?]', '', msg)          # remove emojis/symbols
-    msg = re.sub(r'(.)\1{2,}', r'\1', msg)         # compress loooool -> lol
+    msg = re.sub(r'http\S+', '', msg)
+    msg = re.sub(r'[^\w\s,.!?]', '', msg)
+    msg = re.sub(r'(.)\1{2,}', r'\1', msg)
     msg = re.sub(r'\s+', ' ', msg).strip()
     return msg
 
 def useful_message(msg: str):
     words = msg.split()
 
-    if len(words) < 4:
+    # allow shorter msgs now
+    if len(words) < 2:
         return False
 
-    if msg.startswith(("y", "n")):  # remove yes/no spam
+    if msg.startswith(("y", "n")):
         return False
 
     spam = ["lol", "lmao", "hi", "ok", "bro", "nah", "yep"]
@@ -50,7 +51,14 @@ def compress_buffer(messages, limit=120):
         if useful_message(msg):
             cleaned.append(msg)
 
-    cleaned = cleaned[-limit:]  # HARD CAP = saves $
+    # remove duplicates but keep order
+    cleaned = list(dict.fromkeys(cleaned))
+    cleaned = cleaned[-limit:]
+
+    print("==== SENT TO OPENAI ====")
+    print("\n".join(cleaned))
+    print("========================")
+
     return "\n".join(cleaned)
 
 # ================= READY =================
@@ -73,30 +81,16 @@ async def on_message(message):
 
     content = message.content.lower()
 
-    if content.startswith("t!documentation"):
-        e = discord.Embed(title="📘 TerminusAI Commands", color=0x8a2be2)
-        e.add_field(name="t!watch #channel", value="Set channel to summarize", inline=False)
-        e.add_field(name="t!sendhere #channel", value="Where summaries go", inline=False)
-        e.add_field(name="t!start", value="Start summarizing", inline=False)
-        e.add_field(name="t!stop", value="Stop summarizing", inline=False)
-        e.set_footer(text="Ultra-cheap optimized summarizer.")
-        await message.channel.send(embed=e)
-        return
-
     if content.startswith("t!watch"):
         if message.channel_mentions:
             watch_channel_id = message.channel_mentions[0].id
             await message.channel.send(embed=make_embed(f"👀 Watching {message.channel_mentions[0].mention}"))
-        else:
-            await message.channel.send(embed=make_embed("Usage: t!watch #channel", 0xff0000))
         return
 
     if content.startswith("t!sendhere"):
         if message.channel_mentions:
             send_channel_id = message.channel_mentions[0].id
             await message.channel.send(embed=make_embed(f"🧠 Sending summaries to {message.channel_mentions[0].mention}"))
-        else:
-            await message.channel.send(embed=make_embed("Usage: t!sendhere #channel", 0xff0000))
         return
 
     if content == "t!start":
@@ -120,9 +114,11 @@ async def on_message(message):
         return
 
     buffer.append(message.content)
+    print(f"📥 Added message. Buffer: {len(buffer)}")
 
-    # summarize every 80 msgs (cheap but effective)
-    if len(buffer) >= 80:
+    # 🔥 summarize every 20 msgs (TEST MODE)
+    if len(buffer) >= 20:
+        print("⚡ Triggering summary...")
         await summarize_and_send(message.guild)
         buffer = []
 
@@ -133,17 +129,19 @@ async def summarize_and_send(guild):
 
     send_channel = guild.get_channel(send_channel_id)
     if not send_channel or not buffer:
+        print("❌ No send channel or buffer empty")
         return
 
     compressed = compress_buffer(buffer)
 
     if not compressed.strip():
+        print("❌ Nothing useful after filtering")
         return
 
     try:
         prompt = f"""
 Summarize this Discord chat into EXACTLY 6 short bullet points.
-No fluff. No filler. Focus only on meaningful discussions.
+No fluff. Focus on main discussion only.
 
 Chat:
 {compressed}
@@ -158,12 +156,10 @@ Chat:
         summary = res.choices[0].message.content.strip()
 
         usage = res.usage
-        input_tokens = usage.prompt_tokens
-        output_tokens = usage.completion_tokens
         total_tokens = usage.total_tokens
 
-        cost_input = input_tokens * 0.00000015
-        cost_output = output_tokens * 0.0000006
+        cost_input = usage.prompt_tokens * 0.00000015
+        cost_output = usage.completion_tokens * 0.0000006
         total_cost = cost_input + cost_output
 
         cost_text = f"-# {total_tokens} tokens • ${total_cost:.6f}"
